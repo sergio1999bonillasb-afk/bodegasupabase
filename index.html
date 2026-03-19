@@ -1,160 +1,353 @@
-// --- CONFIGURACIÓN SUPABASE ---
-// Basado en tu llave, tu URL es esta:
-const SUPABASE_URL = 'https://skpcttvwjylgyvswedhi.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNrcGN0dHZ3anlsZ3l2c3dlZGhpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM5NTMzNDQsImV4cCI6MjA4OTUyOTM0NH0.se2YyCsmyBGAS9R6unscPeoalvM4NsFzq4uGggwJ1rM';
-
-// CORRECCIÓN: Cambiamos el nombre de la variable para evitar conflictos
-const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
-let INVENTARIO = [];
-let CURRENT_USER = "";
-
-// Inicializar App al cargar
-window.onload = async () => {
-    console.log("Iniciando conexión...");
-    await fetchFullData();
-};
-
-async function fetchFullData() {
-    const loaderMsg = document.querySelector('#loader p');
-    try {
-        // Intentamos leer la tabla inventario
-        const { data, error } = await _supabase.from('inventario').select('*');
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BODEGA MIRAMONTE | APP</title>
+    
+    <!-- Scripts de Estilo y Base de Datos -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
         
-        if (error) {
-            console.error("Error de Supabase:", error);
-            loaderMsg.innerHTML = `<span class="text-red-500">Error: ${error.message}<br>Revisa si creaste la tabla 'inventario'</span>`;
-            return;
+        body { 
+            font-family: 'Plus Jakarta Sans', sans-serif; 
+            background: #f8fafc; 
+            color: #0f172a;
+            -webkit-tap-highlight-color: transparent;
         }
 
-        INVENTARIO = data || [];
-        console.log("Datos recibidos:", INVENTARIO);
+        .glass-card {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            border-radius: 2rem;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05);
+        }
+
+        .nav-active {
+            color: #2563eb;
+            transform: translateY(-5px);
+            transition: all 0.3s ease;
+        }
+
+        .btn-user {
+            background: white;
+            transition: all 0.2s ease;
+            border: 2px solid transparent;
+        }
+
+        .btn-user:active {
+            transform: scale(0.95);
+            border-color: #3b82f6;
+            background: #eff6ff;
+        }
+
+        /* Animación de carga */
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3b82f6;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="pb-24">
+
+    <!-- PANTALLA DE CARGA (DEBUGGER) -->
+    <div id="loader" class="fixed inset-0 bg-white z-50 flex flex-col items-center justify-center p-6 text-center">
+        <div class="spinner mb-4"></div>
+        <h2 class="text-xl font-extrabold text-slate-800">BODEGA MIRAMONTE</h2>
+        <p id="loader-msg" class="text-slate-500 text-sm mt-2">Sincronizando con Supabase...</p>
+    </div>
+
+    <!-- PANTALLA DE LOGIN -->
+    <div id="login-screen" class="hidden min-h-screen flex flex-col items-center justify-center p-8">
+        <img src="logo.png" alt="Logo" class="w-32 mb-4 drop-shadow-xl">
+        <h1 class="text-3xl font-black tracking-tight text-slate-800">BODEGA MIRAMONTE</h1>
+        <p class="text-slate-400 mb-10 font-medium italic">Control de Etiquetas Auto-adhesivas</p>
         
-        renderDashboard();
-        
-        // Si todo está bien, quitamos el cargador
-        document.getElementById('loader').style.display = 'none';
+        <div class="grid grid-cols-1 gap-4 w-full max-w-xs">
+            <button onclick="login('Sergio')" class="btn-user p-6 rounded-[1.5rem] shadow-sm font-bold text-xl flex justify-between items-center">
+                Sergio <i class="fas fa-chevron-right text-blue-500"></i>
+            </button>
+            <button onclick="login('Raul')" class="btn-user p-6 rounded-[1.5rem] shadow-sm font-bold text-xl flex justify-between items-center">
+                Raul <i class="fas fa-chevron-right text-blue-500"></i>
+            </button>
+            <button onclick="login('Romeo')" class="btn-user p-6 rounded-[1.5rem] shadow-sm font-bold text-xl flex justify-between items-center">
+                Romeo <i class="fas fa-chevron-right text-blue-500"></i>
+            </button>
+        </div>
+    </div>
 
-    } catch (err) {
-        console.error("Error crítico:", err);
-        loaderMsg.innerHTML = `<span class="text-red-500">Error crítico de conexión.<br>Verifica internet o las llaves API.</span>`;
-    }
-}
-
-function login(user) {
-    CURRENT_USER = user;
-    document.getElementById('user-display').innerText = `Operador: ${user}`;
-    document.getElementById('login-screen').classList.add('hidden');
-    document.getElementById('main-app').classList.remove('hidden');
-}
-
-// Búsqueda en tiempo real
-function searchProduct() {
-    const q = document.getElementById('search-input').value.trim().toUpperCase();
-    if(!q) {
-        document.getElementById('res-card').classList.add('hidden');
-        return;
-    }
-
-    const p = INVENTARIO.find(i => i.codigo === q);
-    const card = document.getElementById('res-card');
-
-    if (p) {
-        card.classList.remove('hidden');
-        document.getElementById('res-cod').innerText = p.codigo;
-        document.getElementById('res-des').innerText = p.descripcion;
-        document.getElementById('res-sis').innerText = p.stock_sistema || 0;
-        document.getElementById('res-bod').innerText = p.stock_bodega || 0;
-        document.getElementById('res-ub').innerText = p.ubicacion || 'Sin Ubic.';
-        document.getElementById('res-lot').innerText = `Lote: ${p.lote || 'N/A'}`;
-        document.getElementById('res-er').innerText = p.etiquetas_x_rollo || 0;
-
-        const dif = (p.stock_bodega || 0) - (p.stock_sistema || 0);
-        const difEl = document.getElementById('res-dif');
-        const difBox = document.getElementById('res-dif-box');
-        difEl.innerText = (dif > 0 ? "+" : "") + dif;
-        
-        difBox.className = dif === 0 ? 
-            "p-5 rounded-3xl flex justify-between items-center bg-green-50 text-green-600" : 
-            "p-5 rounded-3xl flex justify-between items-center bg-red-50 text-red-600 font-black";
-    } else {
-        card.classList.add('hidden');
-    }
-}
-
-// Dashboard de descuadrados
-function renderDashboard() {
-    const list = document.getElementById('dash-list');
-    const descuadrados = INVENTARIO.filter(i => (i.stock_sistema || 0) !== (i.stock_bodega || 0));
-    document.getElementById('dash-count').innerText = `${descuadrados.length} encontrados`;
-    
-    list.innerHTML = "";
-    if(descuadrados.length === 0) {
-        list.innerHTML = "<p class='text-center text-slate-400 py-10'>No hay descuadres registrados</p>";
-    }
-
-    descuadrados.forEach(p => {
-        const dif = (p.stock_bodega || 0) - (p.stock_sistema || 0);
-        list.innerHTML += `
-            <div class="glass p-5 rounded-[2rem] border-l-8 border-red-500 flex justify-between items-center">
-                <div class="w-2/3">
-                    <p class="font-black text-slate-800">${p.codigo}</p>
-                    <p class="text-[10px] text-slate-400 truncate">${p.descripcion}</p>
-                </div>
-                <div class="text-right">
-                    <p class="text-xl font-black text-red-600">${dif}</p>
-                    <p class="text-[9px] font-bold text-slate-300 uppercase italic">Dif</p>
-                </div>
+    <!-- CONTENIDO PRINCIPAL -->
+    <div id="main-app" class="hidden animate-in fade-in duration-500">
+        <!-- Header -->
+        <header class="p-6 flex justify-between items-center sticky top-0 bg-white/70 backdrop-blur-md z-40">
+            <div>
+                <p id="user-display" class="text-[10px] font-black text-blue-600 uppercase tracking-widest leading-none"></p>
+                <h2 class="text-2xl font-black text-slate-900">Inventario</h2>
             </div>
-        `;
-    });
-}
+            <img src="logo.png" class="w-10">
+        </header>
 
-function fetchDesc(cod) {
-    const p = INVENTARIO.find(i => i.codigo === cod.trim().toUpperCase());
-    if (p) document.getElementById('m-des').value = p.descripcion;
-}
+        <main class="p-4">
+            <!-- VISTA: BUSCADOR -->
+            <section id="view-search">
+                <div class="relative mb-6">
+                    <input type="text" id="search-input" oninput="searchInDB()" placeholder="Ingresar código (ej: EQBL...)" 
+                        class="w-full p-5 rounded-3xl glass-card border-none focus:ring-4 focus:ring-blue-100 outline-none text-lg font-bold">
+                    <i class="fas fa-search absolute right-6 top-6 text-slate-300"></i>
+                </div>
 
-// Guardar movimiento
-document.getElementById('mov-form').onsubmit = async (e) => {
-    e.preventDefault();
-    const btn = e.target.querySelector('button');
-    btn.innerText = "Sincronizando...";
-    btn.disabled = true;
+                <!-- Card de Resultado -->
+                <div id="res-card" class="hidden glass-card p-6 border-t-8 border-blue-500 animate-in slide-in-from-bottom-4 duration-300">
+                    <div class="flex justify-between items-start mb-2">
+                        <h3 id="res-cod" class="text-2xl font-black text-slate-800"></h3>
+                        <span id="res-ub" class="bg-blue-600 text-white px-4 py-1 rounded-full text-[10px] font-bold"></span>
+                    </div>
+                    <p id="res-des" class="text-slate-500 text-sm mb-6 leading-tight"></p>
+                    
+                    <div class="grid grid-cols-2 gap-3 mb-4">
+                        <div class="bg-slate-50 p-4 rounded-3xl">
+                            <span class="text-[9px] font-bold text-slate-400 block uppercase">Stock Sistema</span>
+                            <span id="res-sis" class="text-xl font-black"></span>
+                        </div>
+                        <div class="bg-slate-50 p-4 rounded-3xl">
+                            <span class="text-[9px] font-bold text-slate-400 block uppercase">Stock Bodega</span>
+                            <span id="res-bod" class="text-xl font-black"></span>
+                        </div>
+                    </div>
 
-    const row = {
-        usuario: CURRENT_USER,
-        codigo: document.getElementById('m-cod').value.trim().toUpperCase(),
-        descripcion: document.getElementById('m-des').value,
-        tipo: document.getElementById('m-tipo').value,
-        cantidad: parseInt(document.getElementById('m-cant').value) || 0,
-        ubicacion_anterior: document.getElementById('m-ua').value,
-        ubicacion_nueva: document.getElementById('m-un').value,
-        lote: document.getElementById('m-lot').value,
-        comentario: document.getElementById('m-com').value
-    };
+                    <div id="res-dif-box" class="p-4 rounded-2xl flex justify-between items-center mb-4">
+                        <span class="text-xs font-bold uppercase">Diferencia</span>
+                        <span id="res-dif" class="text-2xl font-black"></span>
+                    </div>
 
-    const { error } = await _supabase.from('movimientos').insert([row]);
+                    <div class="grid grid-cols-2 gap-2 text-[10px] font-bold text-slate-400 px-2 uppercase">
+                        <span>Lote: <span id="res-lot" class="text-slate-800"></span></span>
+                        <span class="text-right">Etq/Rollo: <span id="res-er" class="text-slate-800"></span></span>
+                    </div>
+                    <div class="mt-4 p-3 bg-yellow-50 rounded-xl">
+                        <p class="text-[10px] font-bold text-yellow-600 uppercase">Comentario:</p>
+                        <p id="res-com" class="text-xs text-yellow-800 italic"></p>
+                    </div>
+                </div>
+            </section>
 
-    if (error) {
-        alert("Error al guardar: " + error.message);
-    } else {
-        alert("? Guardado con éxito en Supabase");
-        e.target.reset();
-        await fetchFullData(); 
-        switchTab('search');
-    }
-    btn.innerText = "GUARDAR REGISTRO";
-    btn.disabled = false;
-};
+            <!-- VISTA: DASHBOARD (DESCUADRES) -->
+            <section id="view-dash" class="hidden">
+                <h3 class="text-xl font-black mb-4 flex justify-between items-center">
+                    Alertas de Descuadre
+                    <span id="dash-count" class="text-xs bg-red-100 text-red-600 px-3 py-1 rounded-full">0</span>
+                </h3>
+                <div id="dash-list" class="space-y-3"></div>
+            </section>
 
-function switchTab(tab) {
-    ['search', 'dash', 'mov'].forEach(t => {
-        document.getElementById('view-' + t).classList.add('hidden');
-        document.getElementById('nav-' + t).classList.remove('tab-active', 'text-blue-500');
-        document.getElementById('nav-' + t).classList.add('text-slate-300');
-    });
-    document.getElementById('view-' + tab).classList.remove('hidden');
-    document.getElementById('nav-' + tab).classList.add('tab-active', 'text-blue-500');
-    document.getElementById('nav-' + tab).classList.remove('text-slate-300');
-}
+            <!-- VISTA: MOVIMIENTOS -->
+            <section id="view-mov" class="hidden">
+                <div class="glass-card p-6">
+                    <h3 class="text-xl font-black mb-6">Registrar Movimiento</h3>
+                    <form id="mov-form" class="space-y-4">
+                        <input type="text" id="m-cod" onchange="autoFill(this.value)" placeholder="Código" class="w-full p-4 rounded-2xl bg-slate-100 border-none font-bold" required>
+                        <input type="text" id="m-des" placeholder="Descripción Automática" class="w-full p-4 rounded-2xl bg-slate-50 text-slate-400 text-xs italic border-none" readonly>
+                        
+                        <div class="grid grid-cols-2 gap-3">
+                            <select id="m-tipo" class="p-4 rounded-2xl bg-blue-600 text-white font-bold border-none outline-none">
+                                <option value="ENTRADA">ENTRADA (+)</option>
+                                <option value="SALIDA">SALIDA (-)</option>
+                                <option value="TRASLADO">TRASLADO</option>
+                            </select>
+                            <input type="number" id="m-cant" placeholder="Cantidad" class="p-4 rounded-2xl bg-slate-100 font-bold border-none" required>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3">
+                            <input type="text" id="m-ua" placeholder="Ubic. Anterior" class="p-4 rounded-2xl bg-slate-100 border-none text-sm">
+                            <input type="text" id="m-un" placeholder="Ubic. Nueva" class="p-4 rounded-2xl bg-slate-100 border-none text-sm">
+                        </div>
+
+                        <input type="text" id="m-lot" placeholder="Lote" class="w-full p-4 rounded-2xl bg-slate-100 border-none font-bold">
+                        <textarea id="m-com" placeholder="Comentario..." class="w-full p-4 rounded-2xl bg-slate-100 border-none h-20 text-sm"></textarea>
+                        
+                        <button type="submit" class="w-full bg-slate-900 text-white p-5 rounded-3xl font-black text-lg shadow-xl active:scale-95 transition-all">GUARDAR EN BASE DE DATOS</button>
+                    </form>
+                </div>
+            </section>
+        </main>
+
+        <!-- Barra de Navegación Inferior -->
+        <nav class="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-xl border-t border-slate-100 flex justify-around p-4 pb-8 z-50">
+            <button onclick="switchTab('search')" id="nav-search" class="nav-active flex flex-col items-center gap-1">
+                <i class="fas fa-search text-xl"></i>
+                <span class="text-[9px] font-black uppercase tracking-widest">Buscador</span>
+            </button>
+            <button onclick="switchTab('dash')" id="nav-dash" class="text-slate-300 flex flex-col items-center gap-1">
+                <i class="fas fa-chart-pie text-xl"></i>
+                <span class="text-[9px] font-black uppercase tracking-widest">Alertas</span>
+            </button>
+            <button onclick="switchTab('mov')" id="nav-mov" class="text-slate-300 flex flex-col items-center gap-1">
+                <i class="fas fa-plus-circle text-xl"></i>
+                <span class="text-[9px] font-black uppercase tracking-widest">Movimiento</span>
+            </button>
+        </nav>
+    </div>
+
+    <script>
+        // --- CONFIGURACIÓN DE SUPABASE (TUS LLAVES) ---
+        const SB_URL = 'https://skpcttvwjylgyvswedhi.supabase.co';
+        const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNrcGN0dHZ3anlsZ3l2c3dlZGhpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM5NTMzNDQsImV4cCI6MjA4OTUyOTM0NH0.se2YyCsmyBGAS9R6unscPeoalvM4NsFzq4uGggwJ1rM';
+        
+        // Inicializar cliente con nombre único para evitar conflictos
+        const _supabase = supabase.createClient(SB_URL, SB_KEY);
+
+        let INVENTARIO = [];
+        let USUARIO_ACTUAL = "";
+
+        // Al iniciar
+        window.onload = async () => {
+            await cargarDatos();
+        };
+
+        async function cargarDatos() {
+            try {
+                const { data, error } = await _supabase.from('inventario').select('*');
+                
+                if (error) throw error;
+
+                INVENTARIO = data || [];
+                renderDash();
+                
+                // Quitar pantalla de carga
+                document.getElementById('loader').style.display = 'none';
+                document.getElementById('login-screen').classList.remove('hidden');
+
+            } catch (err) {
+                console.error(err);
+                document.getElementById('loader-msg').innerHTML = `<b class="text-red-500">Error: ${err.message}</b><br>Verifica si creaste la tabla 'inventario'.`;
+            }
+        }
+
+        function login(u) {
+            USUARIO_ACTUAL = u;
+            document.getElementById('user-display').innerText = `Operador: ${u}`;
+            document.getElementById('login-screen').classList.add('hidden');
+            document.getElementById('main-app').classList.remove('hidden');
+        }
+
+        function searchInDB() {
+            const q = document.getElementById('search-input').value.trim().toUpperCase();
+            const res = INVENTARIO.find(i => i.codigo === q);
+            const card = document.getElementById('res-card');
+
+            if (res) {
+                card.classList.remove('hidden');
+                document.getElementById('res-cod').innerText = res.codigo;
+                document.getElementById('res-des').innerText = res.descripcion;
+                document.getElementById('res-sis').innerText = res.stock_sistema || 0;
+                document.getElementById('res-bod').innerText = res.stock_bodega || 0;
+                document.getElementById('res-ub').innerText = res.ubicacion || 'SIN UBIC.';
+                document.getElementById('res-lot').innerText = res.lote || 'N/A';
+                document.getElementById('res-er').innerText = res.etiquetas_x_rollo || 0;
+                document.getElementById('res-com').innerText = res.comentario || 'Sin comentarios adicionales.';
+
+                const dif = (res.stock_bodega || 0) - (res.stock_sistema || 0);
+                const difEl = document.getElementById('res-dif');
+                const difBox = document.getElementById('res-dif-box');
+                
+                difEl.innerText = (dif > 0 ? "+" : "") + dif;
+                difBox.className = dif === 0 ? 
+                    "p-4 rounded-2xl flex justify-between items-center bg-green-50 text-green-600 font-bold" : 
+                    "p-4 rounded-2xl flex justify-between items-center bg-red-50 text-red-600 font-black";
+            } else {
+                card.classList.add('hidden');
+            }
+        }
+
+        function renderDash() {
+            const list = document.getElementById('dash-list');
+            const descuadrados = INVENTARIO.filter(i => (i.stock_sistema || 0) !== (i.stock_bodega || 0));
+            document.getElementById('dash-count').innerText = descuadrados.length;
+            
+            list.innerHTML = "";
+            if(descuadrados.length === 0) {
+                list.innerHTML = "<p class='text-center text-slate-400 py-10 text-sm italic'>No hay descuadres en bodega.</p>";
+                return;
+            }
+
+            descuadrados.forEach(p => {
+                const dif = (p.stock_bodega || 0) - (p.stock_sistema || 0);
+                list.innerHTML += `
+                    <div class="glass-card p-5 border-l-8 border-red-500 flex justify-between items-center">
+                        <div>
+                            <p class="font-black text-slate-800 text-sm">${p.codigo}</p>
+                            <p class="text-[9px] text-slate-400 truncate w-40">${p.descripcion}</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-xl font-black text-red-600">${dif > 0 ? '+' : ''}${dif}</p>
+                            <p class="text-[8px] font-bold text-slate-300 uppercase tracking-widest">Diferencia</p>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        function autoFill(cod) {
+            const p = INVENTARIO.find(i => i.codigo === cod.trim().toUpperCase());
+            if (p) document.getElementById('m-des').value = p.descripcion;
+        }
+
+        // GUARDAR MOVIMIENTO
+        document.getElementById('mov-form').onsubmit = async (e) => {
+            e.preventDefault();
+            const btn = e.target.querySelector('button');
+            const originalText = btn.innerText;
+            btn.innerText = "SINCRONIZANDO...";
+            btn.disabled = true;
+
+            const row = {
+                usuario: USUARIO_ACTUAL,
+                codigo: document.getElementById('m-cod').value.trim().toUpperCase(),
+                descripcion: document.getElementById('m-des').value,
+                tipo: document.getElementById('m-tipo').value,
+                cantidad: parseFloat(document.getElementById('m-cant').value) || 0,
+                ubicacion_anterior: document.getElementById('m-ua').value,
+                ubicacion_nueva: document.getElementById('m-un').value,
+                lote: document.getElementById('m-lot').value,
+                comentario: document.getElementById('m-com').value
+            };
+
+            try {
+                const { error } = await _supabase.from('movimientos').insert([row]);
+                if (error) throw error;
+
+                alert("? Registro guardado en Supabase");
+                e.target.reset();
+                await cargarDatos(); // Refrescar stock local
+                switchTab('search');
+            } catch (err) {
+                alert("Error: " + err.message);
+            } finally {
+                btn.innerText = originalText;
+                btn.disabled = false;
+            }
+        };
+
+        function switchTab(t) {
+            ['search', 'dash', 'mov'].forEach(v => {
+                document.getElementById('view-' + v).classList.add('hidden');
+                document.getElementById('nav-' + v).classList.replace('nav-active', 'text-slate-300');
+            });
+            document.getElementById('view-' + t).classList.remove('hidden');
+            document.getElementById('nav-' + t).classList.add('nav-active');
+            document.getElementById('nav-' + t).classList.remove('text-slate-300');
+        }
+    </script>
+</body>
+</html>
