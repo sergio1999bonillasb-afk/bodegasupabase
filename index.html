@@ -1,0 +1,160 @@
+// --- CONFIGURACIÓN SUPABASE ---
+// Basado en tu llave, tu URL es esta:
+const SUPABASE_URL = 'https://skpcttvwjylgyvswedhi.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNrcGN0dHZ3anlsZ3l2c3dlZGhpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM5NTMzNDQsImV4cCI6MjA4OTUyOTM0NH0.se2YyCsmyBGAS9R6unscPeoalvM4NsFzq4uGggwJ1rM';
+
+// CORRECCIÓN: Cambiamos el nombre de la variable para evitar conflictos
+const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let INVENTARIO = [];
+let CURRENT_USER = "";
+
+// Inicializar App al cargar
+window.onload = async () => {
+    console.log("Iniciando conexión...");
+    await fetchFullData();
+};
+
+async function fetchFullData() {
+    const loaderMsg = document.querySelector('#loader p');
+    try {
+        // Intentamos leer la tabla inventario
+        const { data, error } = await _supabase.from('inventario').select('*');
+        
+        if (error) {
+            console.error("Error de Supabase:", error);
+            loaderMsg.innerHTML = `<span class="text-red-500">Error: ${error.message}<br>Revisa si creaste la tabla 'inventario'</span>`;
+            return;
+        }
+
+        INVENTARIO = data || [];
+        console.log("Datos recibidos:", INVENTARIO);
+        
+        renderDashboard();
+        
+        // Si todo está bien, quitamos el cargador
+        document.getElementById('loader').style.display = 'none';
+
+    } catch (err) {
+        console.error("Error crítico:", err);
+        loaderMsg.innerHTML = `<span class="text-red-500">Error crítico de conexión.<br>Verifica internet o las llaves API.</span>`;
+    }
+}
+
+function login(user) {
+    CURRENT_USER = user;
+    document.getElementById('user-display').innerText = `Operador: ${user}`;
+    document.getElementById('login-screen').classList.add('hidden');
+    document.getElementById('main-app').classList.remove('hidden');
+}
+
+// Búsqueda en tiempo real
+function searchProduct() {
+    const q = document.getElementById('search-input').value.trim().toUpperCase();
+    if(!q) {
+        document.getElementById('res-card').classList.add('hidden');
+        return;
+    }
+
+    const p = INVENTARIO.find(i => i.codigo === q);
+    const card = document.getElementById('res-card');
+
+    if (p) {
+        card.classList.remove('hidden');
+        document.getElementById('res-cod').innerText = p.codigo;
+        document.getElementById('res-des').innerText = p.descripcion;
+        document.getElementById('res-sis').innerText = p.stock_sistema || 0;
+        document.getElementById('res-bod').innerText = p.stock_bodega || 0;
+        document.getElementById('res-ub').innerText = p.ubicacion || 'Sin Ubic.';
+        document.getElementById('res-lot').innerText = `Lote: ${p.lote || 'N/A'}`;
+        document.getElementById('res-er').innerText = p.etiquetas_x_rollo || 0;
+
+        const dif = (p.stock_bodega || 0) - (p.stock_sistema || 0);
+        const difEl = document.getElementById('res-dif');
+        const difBox = document.getElementById('res-dif-box');
+        difEl.innerText = (dif > 0 ? "+" : "") + dif;
+        
+        difBox.className = dif === 0 ? 
+            "p-5 rounded-3xl flex justify-between items-center bg-green-50 text-green-600" : 
+            "p-5 rounded-3xl flex justify-between items-center bg-red-50 text-red-600 font-black";
+    } else {
+        card.classList.add('hidden');
+    }
+}
+
+// Dashboard de descuadrados
+function renderDashboard() {
+    const list = document.getElementById('dash-list');
+    const descuadrados = INVENTARIO.filter(i => (i.stock_sistema || 0) !== (i.stock_bodega || 0));
+    document.getElementById('dash-count').innerText = `${descuadrados.length} encontrados`;
+    
+    list.innerHTML = "";
+    if(descuadrados.length === 0) {
+        list.innerHTML = "<p class='text-center text-slate-400 py-10'>No hay descuadres registrados</p>";
+    }
+
+    descuadrados.forEach(p => {
+        const dif = (p.stock_bodega || 0) - (p.stock_sistema || 0);
+        list.innerHTML += `
+            <div class="glass p-5 rounded-[2rem] border-l-8 border-red-500 flex justify-between items-center">
+                <div class="w-2/3">
+                    <p class="font-black text-slate-800">${p.codigo}</p>
+                    <p class="text-[10px] text-slate-400 truncate">${p.descripcion}</p>
+                </div>
+                <div class="text-right">
+                    <p class="text-xl font-black text-red-600">${dif}</p>
+                    <p class="text-[9px] font-bold text-slate-300 uppercase italic">Dif</p>
+                </div>
+            </div>
+        `;
+    });
+}
+
+function fetchDesc(cod) {
+    const p = INVENTARIO.find(i => i.codigo === cod.trim().toUpperCase());
+    if (p) document.getElementById('m-des').value = p.descripcion;
+}
+
+// Guardar movimiento
+document.getElementById('mov-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const btn = e.target.querySelector('button');
+    btn.innerText = "Sincronizando...";
+    btn.disabled = true;
+
+    const row = {
+        usuario: CURRENT_USER,
+        codigo: document.getElementById('m-cod').value.trim().toUpperCase(),
+        descripcion: document.getElementById('m-des').value,
+        tipo: document.getElementById('m-tipo').value,
+        cantidad: parseInt(document.getElementById('m-cant').value) || 0,
+        ubicacion_anterior: document.getElementById('m-ua').value,
+        ubicacion_nueva: document.getElementById('m-un').value,
+        lote: document.getElementById('m-lot').value,
+        comentario: document.getElementById('m-com').value
+    };
+
+    const { error } = await _supabase.from('movimientos').insert([row]);
+
+    if (error) {
+        alert("Error al guardar: " + error.message);
+    } else {
+        alert("? Guardado con éxito en Supabase");
+        e.target.reset();
+        await fetchFullData(); 
+        switchTab('search');
+    }
+    btn.innerText = "GUARDAR REGISTRO";
+    btn.disabled = false;
+};
+
+function switchTab(tab) {
+    ['search', 'dash', 'mov'].forEach(t => {
+        document.getElementById('view-' + t).classList.add('hidden');
+        document.getElementById('nav-' + t).classList.remove('tab-active', 'text-blue-500');
+        document.getElementById('nav-' + t).classList.add('text-slate-300');
+    });
+    document.getElementById('view-' + tab).classList.remove('hidden');
+    document.getElementById('nav-' + tab).classList.add('tab-active', 'text-blue-500');
+    document.getElementById('nav-' + tab).classList.remove('text-slate-300');
+}
